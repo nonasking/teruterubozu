@@ -1,4 +1,6 @@
 # teruterubozu ☀️
+![istockphoto-1248324240-612x612](https://github.com/user-attachments/assets/d09675ba-6b3a-4892-be26-4aad156bb2c9)
+
 
 내일 비가 오는지 매일 20시에 자동으로 확인하는 날씨 알림 서버.
 
