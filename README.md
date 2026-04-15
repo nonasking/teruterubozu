@@ -1,4 +1,4 @@
-# teruterubozu ☀️
+# teruterubozu
 ![istockphoto-1248324240-612x612](https://github.com/user-attachments/assets/d09675ba-6b3a-4892-be26-4aad156bb2c9)
 
 
