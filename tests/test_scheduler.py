@@ -6,29 +6,32 @@ from apscheduler.triggers.cron import CronTrigger
 from backend.scheduler import check_tomorrow_rain
 import backend.scheduler as sched_module
 
+_WEATHER = {"rain": False, "temp_max": 25.0, "temp_min": 15.0, "pm10": 20.0, "pm2_5": 10.0}
+_WEATHER_RAIN = {"rain": True, "temp_max": 18.0, "temp_min": 12.0, "pm10": 30.0, "pm2_5": 15.0}
+
 
 # --- check_tomorrow_rain logic ---
 
-@patch("backend.scheduler.send_rain_alert")
+@patch("backend.scheduler.send_daily_report")
 @patch("backend.scheduler.get_tomorrow_weather")
-def test_sends_sms_when_rain_expected(mock_weather, mock_alert):
-    mock_weather.return_value = True
+def test_always_sends_report_regardless_of_rain(mock_weather, mock_report):
+    mock_weather.return_value = _WEATHER
     check_tomorrow_rain()
-    mock_alert.assert_called_once()
+    mock_report.assert_called_once_with(_WEATHER)
 
 
-@patch("backend.scheduler.send_rain_alert")
+@patch("backend.scheduler.send_daily_report")
 @patch("backend.scheduler.get_tomorrow_weather")
-def test_no_sms_when_no_rain(mock_weather, mock_alert):
-    mock_weather.return_value = False
+def test_sends_report_even_when_rain_expected(mock_weather, mock_report):
+    mock_weather.return_value = _WEATHER_RAIN
     check_tomorrow_rain()
-    mock_alert.assert_not_called()
+    mock_report.assert_called_once_with(_WEATHER_RAIN)
 
 
-@patch("backend.scheduler.send_rain_alert")
+@patch("backend.scheduler.send_daily_report")
 @patch("backend.scheduler.get_tomorrow_weather")
-def test_weather_always_checked(mock_weather, mock_alert):
-    mock_weather.return_value = False
+def test_weather_always_checked(mock_weather, mock_report):
+    mock_weather.return_value = _WEATHER
     check_tomorrow_rain()
     mock_weather.assert_called_once()
 
