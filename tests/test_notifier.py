@@ -5,10 +5,9 @@ import pytest
 from backend.notifier import send_rain_alert
 
 _ENV = {
-    "TWILIO_ACCOUNT_SID": "ACtest123",
-    "TWILIO_AUTH_TOKEN": "auth_token_test",
-    "TWILIO_FROM_NUMBER": "+10000000000",
-    "TWILIO_TO_NUMBER": "+821000000000",
+    "GMAIL_USER": "test@gmail.com",
+    "GMAIL_APP_PASSWORD": "test_app_password",
+    "NOTIFY_TO_EMAIL": "recipient@example.com",
 }
 
 
@@ -18,50 +17,70 @@ def env(monkeypatch):
         monkeypatch.setenv(k, v)
 
 
-def _setup_mock_client(mock_client_cls: MagicMock, sid: str = "SM_TEST") -> MagicMock:
-    mock_client = MagicMock()
-    mock_client_cls.return_value = mock_client
-    mock_message = MagicMock()
-    mock_message.sid = sid
-    mock_client.messages.create.return_value = mock_message
-    return mock_client
+def _make_smtp_mock() -> MagicMock:
+    mock_smtp = MagicMock()
+    mock_smtp.__enter__ = MagicMock(return_value=mock_smtp)
+    mock_smtp.__exit__ = MagicMock(return_value=False)
+    return mock_smtp
 
 
-# --- Twilio client initialization ---
+# --- SMTP connection and auth ---
 
-@patch("backend.notifier.Client")
-def test_client_initialized_with_credentials(mock_client_cls):
-    _setup_mock_client(mock_client_cls)
+@patch("backend.notifier.smtplib.SMTP")
+def test_smtp_connects_to_gmail(mock_smtp_cls):
+    mock_smtp_cls.return_value = _make_smtp_mock()
     send_rain_alert()
-    mock_client_cls.assert_called_once_with("ACtest123", "auth_token_test")
+    mock_smtp_cls.assert_called_once_with("smtp.gmail.com", 587)
 
 
-# --- Message creation ---
-
-@patch("backend.notifier.Client")
-def test_message_sent_to_correct_number(mock_client_cls):
-    mock_client = _setup_mock_client(mock_client_cls)
+@patch("backend.notifier.smtplib.SMTP")
+def test_starttls_called(mock_smtp_cls):
+    mock_smtp = _make_smtp_mock()
+    mock_smtp_cls.return_value = mock_smtp
     send_rain_alert()
-    mock_client.messages.create.assert_called_once_with(
-        body="☔ 내일 비가 올 예정입니다. 우산을 챙기세요!",
-        from_="+10000000000",
-        to="+821000000000",
-    )
+    mock_smtp.starttls.assert_called_once()
 
 
-@patch("backend.notifier.Client")
-def test_message_body_contains_rain_warning(mock_client_cls):
-    mock_client = _setup_mock_client(mock_client_cls)
+@patch("backend.notifier.smtplib.SMTP")
+def test_login_uses_credentials(mock_smtp_cls):
+    mock_smtp = _make_smtp_mock()
+    mock_smtp_cls.return_value = mock_smtp
     send_rain_alert()
-    _, kwargs = mock_client.messages.create.call_args
-    assert "비" in kwargs["body"]
-    assert "우산" in kwargs["body"]
+    mock_smtp.login.assert_called_once_with("test@gmail.com", "test_app_password")
+
+
+# --- Email delivery ---
+
+@patch("backend.notifier.smtplib.SMTP")
+def test_sendmail_to_correct_recipient(mock_smtp_cls):
+    mock_smtp = _make_smtp_mock()
+    mock_smtp_cls.return_value = mock_smtp
+    send_rain_alert()
+    args, _ = mock_smtp.sendmail.call_args
+    assert args[0] == "test@gmail.com"
+    assert args[1] == "recipient@example.com"
+
+
+@patch("backend.notifier.smtplib.SMTP")
+def test_email_body_contains_rain_warning(mock_smtp_cls):
+    import base64
+    import email
+
+    mock_smtp = _make_smtp_mock()
+    mock_smtp_cls.return_value = mock_smtp
+    send_rain_alert()
+    args, _ = mock_smtp.sendmail.call_args
+    raw_message = args[2]
+    msg = email.message_from_string(raw_message)
+    payload = base64.b64decode(msg.get_payload()).decode("utf-8")
+    assert "비" in payload
+    assert "우산" in payload
 
 
 # --- Logging ---
 
-@patch("backend.notifier.Client")
-def test_prints_message_sid(mock_client_cls, capsys):
-    _setup_mock_client(mock_client_cls, sid="SM_UNIQUE_SID")
+@patch("backend.notifier.smtplib.SMTP")
+def test_prints_recipient_on_success(mock_smtp_cls, capsys):
+    mock_smtp_cls.return_value = _make_smtp_mock()
     send_rain_alert()
-    assert "SM_UNIQUE_SID" in capsys.readouterr().out
+    assert "recipient@example.com" in capsys.readouterr().out
