@@ -1,17 +1,16 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from backend.notifier import send_rain_alert
+from backend.notifier import send_daily_report
 from backend.weather import get_tomorrow_weather
 
 scheduler = AsyncIOScheduler()
 
 
 def check_tomorrow_rain() -> None:
-    will_rain = get_tomorrow_weather()
-    print(f"[scheduler] tomorrow rain forecast: {will_rain}")
-    if will_rain:
-        send_rain_alert()
+    weather = get_tomorrow_weather()
+    print(f"[scheduler] tomorrow rain forecast: {weather['rain']}")
+    send_daily_report(weather)
 
 
 def start() -> None:
