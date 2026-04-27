@@ -28,10 +28,10 @@ def _grade(value: float, thresholds: list[int]) -> str:
 def _grade_color(grade: str) -> str:
     """Return badge background color for a given air-quality grade."""
     return {
-        "좋음": "#388e3c",
-        "보통": "#f9a825",
-        "나쁨": "#e65100",
-        "매우나쁨": "#b71c1c",
+        "좋음": "#43a047",
+        "보통": "#7cb342",
+        "나쁨": "#fb8c00",
+        "매우나쁨": "#e53935",
     }[grade]
 
 
@@ -109,11 +109,11 @@ def _build_html(
             <td style="{value_style}">{weather['temp_min']:.1f}°C</td>
           </tr>
           <tr>
-            <td style="{label_style}">PM10</td>
+            <td style="{label_style}">미세먼지 (PM10)</td>
             <td style="{value_style}">{weather['pm10']:.1f} μg/m³ &nbsp;{pm10_badge}</td>
           </tr>
           <tr>
-            <td style="{last_label_style}">PM2.5</td>
+            <td style="{last_label_style}">초미세먼지 (PM2.5)</td>
             <td style="{last_value_style}">{weather['pm2_5']:.1f} μg/m³ &nbsp;{pm2_5_badge}</td>
           </tr>
         </table>
