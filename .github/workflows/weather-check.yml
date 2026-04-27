@@ -30,4 +30,5 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           NOTIFY_TO_EMAIL: ${{ secrets.NOTIFY_TO_EMAIL }}
+          CLOTHES_IMAGE_PATH: assets/clothes_per_temperature.jpg
         run: python run.py
