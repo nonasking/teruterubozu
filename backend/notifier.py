@@ -109,11 +109,11 @@ def _build_html(
             <td style="{value_style}">{weather['temp_min']:.1f}°C</td>
           </tr>
           <tr>
-            <td style="{label_style}">PM10</td>
+            <td style="{label_style}">미세먼지 (PM10)</td>
             <td style="{value_style}">{weather['pm10']:.1f} μg/m³ &nbsp;{pm10_badge}</td>
           </tr>
           <tr>
-            <td style="{last_label_style}">PM2.5</td>
+            <td style="{last_label_style}">초미세먼지 (PM2.5)</td>
             <td style="{last_value_style}">{weather['pm2_5']:.1f} μg/m³ &nbsp;{pm2_5_badge}</td>
           </tr>
         </table>
