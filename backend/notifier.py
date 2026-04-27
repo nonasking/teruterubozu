@@ -1,5 +1,6 @@
 import os
 import smtplib
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -49,6 +50,7 @@ def _build_html(
     subject: str,
     pm10_grade: str,
     pm2_5_grade: str,
+    has_image: bool = False,
 ) -> str:
     """Build the HTML body for the daily weather report email.
 
@@ -57,6 +59,7 @@ def _build_html(
         subject: full email subject (used as header title, includes emoji)
         pm10_grade: Korean grade for PM10
         pm2_5_grade: Korean grade for PM2.5
+        has_image: whether to include the CID inline clothes-guide image section
 
     Returns:
         Complete HTML document as a string. All CSS is inline for Gmail
@@ -79,6 +82,18 @@ def _build_html(
 
     pm10_badge = _badge(pm10_grade)
     pm2_5_badge = _badge(pm2_5_grade)
+
+    clothes_section = ""
+    if has_image:
+        clothes_section = """
+    <tr>
+      <td style="background:#ffffff;padding:0 24px 16px;border-radius:0 0 8px 8px;">
+        <div style="border-top:1px solid #eeeeee;padding-top:16px;">
+          <p style="margin:0 0 10px;color:#555555;font-size:13px;font-weight:600;">기온별 옷차림 가이드</p>
+          <img src="cid:clothes_image" alt="기온별 옷차림 가이드" style="width:100%;max-width:480px;display:block;border-radius:6px;">
+        </div>
+      </td>
+    </tr>"""
 
     return f"""<!DOCTYPE html>
 <html lang="ko">
@@ -118,7 +133,7 @@ def _build_html(
           </tr>
         </table>
       </td>
-    </tr>
+    </tr>{clothes_section}
     <tr>
       <td style="padding:12px 4px;text-align:center;color:#999;font-size:11px;">
         teruterubozu · 자동 발송
@@ -141,6 +156,11 @@ def send_daily_report(weather: dict) -> None:
         GMAIL_USER          – Gmail address used to send the email
         GMAIL_APP_PASSWORD  – Gmail App Password
         NOTIFY_TO_EMAIL     – Recipient email address
+
+    Optional environment variables:
+        CLOTHES_IMAGE_PATH  – Absolute path to the clothes-guide image.
+                              Tilde (~) is expanded. If absent or the file
+                              cannot be read, the image section is omitted.
     """
     gmail_user = os.environ["GMAIL_USER"]
     gmail_app_password = os.environ["GMAIL_APP_PASSWORD"]
@@ -163,14 +183,47 @@ def send_daily_report(weather: dict) -> None:
         f"😷 초미세먼지(PM2.5): {weather['pm2_5']:.1f} μg/m³ ({pm2_5_grade})"
     )
 
-    html_body = _build_html(weather, subject, pm10_grade, pm2_5_grade)
+    # --- CID inline image (optional) ---
+    image_part: MIMEImage | None = None
+    has_image = False
+    raw_path = os.environ.get("CLOTHES_IMAGE_PATH", "")
+    if raw_path:
+        image_path = os.path.expanduser(raw_path)
+        try:
+            with open(image_path, "rb") as f:
+                image_data = f.read()
+            image_part = MIMEImage(image_data)
+            image_part.add_header("Content-ID", "<clothes_image>")
+            image_part.add_header(
+                "Content-Disposition", "inline", filename="clothes_image"
+            )
+            has_image = True
+        except Exception as exc:
+            print(f"[notifier] 이미지 첨부 실패: {exc}")
 
-    msg = MIMEMultipart("alternative")
+    html_body = _build_html(weather, subject, pm10_grade, pm2_5_grade, has_image=has_image)
+
+    # --- MIME structure (Gmail-compatible) ---
+    # MIMEMultipart("mixed")
+    # └── MIMEMultipart("alternative")
+    #     ├── MIMEText(plain)
+    #     └── MIMEMultipart("related")
+    #         ├── MIMEText(html)
+    #         └── MIMEImage (CID)   ← only when has_image
+    related = MIMEMultipart("related")
+    related.attach(MIMEText(html_body, "html", "utf-8"))
+    if image_part is not None:
+        related.attach(image_part)
+
+    alternative = MIMEMultipart("alternative")
+    alternative.attach(MIMEText(body, "plain", "utf-8"))
+    alternative.attach(related)
+
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"] = gmail_user
     msg["To"] = to_email
-    msg.attach(MIMEText(body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(alternative)
 
     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
         smtp.ehlo()
