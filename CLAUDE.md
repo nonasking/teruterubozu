@@ -10,3 +10,4 @@
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
 | 2026-04-13 | 초기 구성 | 전체 | - |
+| 2026-04-27 | 에이전트 정의 동기화 — Twilio→Gmail SMTP, send_rain_alert→send_daily_report, →bool→→dict | agents/backend-engineer.md, agents/code-reviewer.md | 코드 리팩토링 후 drift 발생 |

@@ -3,6 +3,27 @@ import smtplib
 from email.mime.text import MIMEText
 
 
+def _grade(value: float, thresholds: list[int]) -> str:
+    """Return Korean air-quality grade for a particulate-matter value.
+
+    Args:
+        value: measured concentration (μg/m³)
+        thresholds: [보통 경계, 나쁨 경계, 매우나쁨 경계]
+            e.g. PM10 → [31, 81, 151], PM2.5 → [16, 36, 76]
+
+    Returns:
+        "좋음" / "보통" / "나쁨" / "매우나쁨"
+    """
+    moderate, unhealthy, very_unhealthy = thresholds
+    if value < moderate:
+        return "좋음"
+    if value < unhealthy:
+        return "보통"
+    if value < very_unhealthy:
+        return "나쁨"
+    return "매우나쁨"
+
+
 def send_daily_report(weather: dict) -> None:
     """Send a daily weather report email regardless of rain forecast.
 
@@ -26,13 +47,15 @@ def send_daily_report(weather: dict) -> None:
         subject = "☀️ 내일 날씨 알림"
 
     rain_label = "있음" if weather["rain"] else "없음"
+    pm10_grade = _grade(weather["pm10"], [31, 81, 151])
+    pm2_5_grade = _grade(weather["pm2_5"], [16, 36, 76])
     body = (
         "[내일 날씨 요약]\n"
         f"🌧 비 예보: {rain_label}\n"
         f"🌡 최고기온: {weather['temp_max']:.1f}°C\n"
         f"🌡 최저기온: {weather['temp_min']:.1f}°C\n"
-        f"😷 미세먼지(PM10): {weather['pm10']:.1f} μg/m³\n"
-        f"😷 초미세먼지(PM2.5): {weather['pm2_5']:.1f} μg/m³"
+        f"😷 미세먼지(PM10): {weather['pm10']:.1f} μg/m³ ({pm10_grade})\n"
+        f"😷 초미세먼지(PM2.5): {weather['pm2_5']:.1f} μg/m³ ({pm2_5_grade})"
     )
 
     msg = MIMEText(body, "plain", "utf-8")
