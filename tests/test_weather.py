@@ -2,8 +2,10 @@ from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
+from pydantic import ValidationError
 
-from backend.weather import get_tomorrow_weather
+from backend.weather import _get_with_retry, get_tomorrow_weather
 
 _ENV = {
     "OPENWEATHER_API_KEY": "test_key",
@@ -298,3 +300,122 @@ def test_raise_for_status_called_for_both_apis(mock_get):
     get_tomorrow_weather()
     forecast_mock.raise_for_status.assert_called_once()
     air_mock.raise_for_status.assert_called_once()
+
+
+# --- Retry / backoff (tenacity) ---
+
+
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch):
+    """Make tenacity's sleep a no-op so retry tests don't actually wait."""
+    monkeypatch.setattr("backend.weather._get_with_retry.retry.sleep", lambda _s: None)
+
+
+def _http_error(status_code: int) -> requests.exceptions.HTTPError:
+    """Build an HTTPError carrying a real Response with the given status code."""
+    response = requests.Response()
+    response.status_code = status_code
+    return requests.exceptions.HTTPError(response=response)
+
+
+def _response_raising(exc: BaseException) -> MagicMock:
+    """Mock response whose raise_for_status() raises the given exception."""
+    m = MagicMock()
+    m.raise_for_status.side_effect = exc
+    return m
+
+
+def test_retry_succeeds_after_two_5xx_failures():
+    success = _mock_forecast_response([_forecast_entry(_tomorrow(), 800)])
+    with patch(
+        "backend.weather.requests.get",
+        side_effect=[
+            _response_raising(_http_error(503)),
+            _response_raising(_http_error(502)),
+            success,
+        ],
+    ) as mock_get:
+        result = _get_with_retry("http://example.com", {})
+    assert result is success
+    assert mock_get.call_count == 3
+
+
+def test_retry_exhausted_on_persistent_503():
+    with patch(
+        "backend.weather.requests.get",
+        side_effect=[_response_raising(_http_error(503)) for _ in range(3)],
+    ) as mock_get:
+        with pytest.raises(requests.exceptions.HTTPError):
+            _get_with_retry("http://example.com", {})
+    assert mock_get.call_count == 3
+
+
+def test_no_retry_on_4xx():
+    with patch(
+        "backend.weather.requests.get",
+        side_effect=[_response_raising(_http_error(401))],
+    ) as mock_get:
+        with pytest.raises(requests.exceptions.HTTPError):
+            _get_with_retry("http://example.com", {})
+    # 4xx is fail-fast: exactly one call, no retries.
+    assert mock_get.call_count == 1
+
+
+def test_retry_on_connection_error_then_success():
+    success = _mock_forecast_response([_forecast_entry(_tomorrow(), 800)])
+    with patch(
+        "backend.weather.requests.get",
+        side_effect=[
+            requests.exceptions.ConnectionError("boom"),
+            requests.exceptions.Timeout("slow"),
+            success,
+        ],
+    ) as mock_get:
+        result = _get_with_retry("http://example.com", {})
+    assert result is success
+    assert mock_get.call_count == 3
+
+
+# --- Pydantic schema validation ---
+
+
+@patch("backend.weather.requests.get")
+def test_validation_error_when_forecast_missing_required_field(mock_get):
+    # Forecast entry missing "main" -> ValidationError
+    bad_forecast = MagicMock()
+    bad_forecast.json.return_value = {
+        "list": [
+            {
+                "dt_txt": f"{_tomorrow()} 12:00:00",
+                "weather": [{"id": 800}],
+                # "main" omitted on purpose
+            }
+        ]
+    }
+    air_mock = _mock_air_response([_air_entry(_tomorrow_dt())])
+    mock_get.side_effect = [bad_forecast, air_mock]
+    with pytest.raises(ValidationError):
+        get_tomorrow_weather()
+
+
+@patch("backend.weather.requests.get")
+def test_validation_error_when_air_pollution_missing_required_field(mock_get):
+    forecast_mock = _mock_forecast_response([_forecast_entry(_tomorrow(), 800)])
+    # Air entry missing "components" -> ValidationError
+    bad_air = MagicMock()
+    bad_air.json.return_value = {"list": [{"dt": _tomorrow_dt()}]}
+    mock_get.side_effect = [forecast_mock, bad_air]
+    with pytest.raises(ValidationError):
+        get_tomorrow_weather()
+
+
+@patch("backend.weather.requests.get")
+def test_valid_response_passes_schema_validation(mock_get):
+    mock_get.side_effect = _make_get_side_effect(
+        [_forecast_entry(_tomorrow(), 501, temp_max=22.0, temp_min=10.0)],
+        [_air_entry(_tomorrow_dt(), pm10=20.0, pm2_5=10.0)],
+    )
+    result = get_tomorrow_weather()
+    assert result["rain"] is True
+    assert result["temp_max"] == pytest.approx(22.0)
+    assert result["pm10"] == pytest.approx(20.0)
