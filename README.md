@@ -1,4 +1,9 @@
 # teruterubozu
+
+[![CI](https://github.com/nonasking/teruterubozu/actions/workflows/ci.yml/badge.svg)](https://github.com/nonasking/teruterubozu/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/nonasking/teruterubozu/branch/main/graph/badge.svg)](https://codecov.io/gh/nonasking/teruterubozu)
+[![python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+
 ![istockphoto-1248324240-612x612](https://github.com/user-attachments/assets/d09675ba-6b3a-4892-be26-4aad156bb2c9)
 
 

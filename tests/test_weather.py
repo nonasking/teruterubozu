@@ -1,5 +1,5 @@
-from datetime import date, datetime, timedelta, timezone
-from unittest.mock import MagicMock, call, patch
+from datetime import date, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 import pytest
 
