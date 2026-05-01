@@ -1,8 +1,18 @@
 # teruterubozu
+
+[![CI](https://github.com/nonasking/teruterubozu/actions/workflows/ci.yml/badge.svg)](https://github.com/nonasking/teruterubozu/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/nonasking/teruterubozu/branch/main/graph/badge.svg)](https://codecov.io/gh/nonasking/teruterubozu)
+[![python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+
 ![istockphoto-1248324240-612x612](https://github.com/user-attachments/assets/d09675ba-6b3a-4892-be26-4aad156bb2c9)
 
 
 A weather notification service that automatically checks tomorrow's forecast (rain, high/low temperature, fine dust) every day at 20:00 KST and delivers it as an HTML email.
+
+## Highlights
+
+- **Auto-recovery from upstream failures** — exponential backoff retry on OpenWeather 5xx / network errors (tenacity, 3 attempts, 1→2→4s); 4xx fails fast to surface bad coordinates or auth immediately.
+- **Schema drift guard** — pydantic validates the fields the pipeline depends on, so any OpenWeather breaking change raises `ValidationError` instead of silently corrupting the email.
 
 ## Tech Stack
 

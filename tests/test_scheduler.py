@@ -1,10 +1,9 @@
 from unittest.mock import patch
 
-import pytest
 from apscheduler.triggers.cron import CronTrigger
 
-from backend.scheduler import check_tomorrow_rain
 import backend.scheduler as sched_module
+from backend.scheduler import check_tomorrow_rain
 
 _WEATHER = {"rain": False, "temp_max": 25.0, "temp_min": 15.0, "pm10": 20.0, "pm2_5": 10.0}
 _WEATHER_RAIN = {"rain": True, "temp_max": 18.0, "temp_min": 12.0, "pm10": 30.0, "pm2_5": 15.0}

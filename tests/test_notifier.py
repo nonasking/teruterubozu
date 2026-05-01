@@ -104,7 +104,6 @@ def test_subject_no_rain_label_when_clear(mock_smtp_cls):
 
 @patch("backend.notifier.smtplib.SMTP")
 def test_body_contains_weather_fields(mock_smtp_cls):
-    import base64
     import email
 
     mock_smtp = _make_smtp_mock()
@@ -112,7 +111,10 @@ def test_body_contains_weather_fields(mock_smtp_cls):
     send_daily_report(_WEATHER_RAIN)
     args, _ = mock_smtp.sendmail.call_args
     msg = email.message_from_string(args[2])
-    payload = base64.b64decode(msg.get_payload()).decode("utf-8")
+    text_part = next(
+        part for part in msg.walk() if part.get_content_type() == "text/plain"
+    )
+    payload = text_part.get_payload(decode=True).decode("utf-8")
     assert "최고기온" in payload
     assert "최저기온" in payload
     assert "PM10" in payload or "미세먼지" in payload
