@@ -9,6 +9,11 @@
 
 A weather notification service that automatically checks tomorrow's forecast (rain, high/low temperature, fine dust) every day at 20:00 KST and delivers it as an HTML email.
 
+## Highlights
+
+- **Auto-recovery from upstream failures** — exponential backoff retry on OpenWeather 5xx / network errors (tenacity, 3 attempts, 1→2→4s); 4xx fails fast to surface bad coordinates or auth immediately.
+- **Schema drift guard** — pydantic validates the fields the pipeline depends on, so any OpenWeather breaking change raises `ValidationError` instead of silently corrupting the email.
+
 ## Tech Stack
 
 - **Python** 3.11+
