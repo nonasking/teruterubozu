@@ -6,6 +6,9 @@ on:
     - cron: "0 11 * * *"
   workflow_dispatch: # 수동 실행 버튼 활성화 (테스트용)
 
+permissions:
+  contents: write # keepalive 빈 커밋 푸시용
+
 jobs:
   check-weather:
     runs-on: ubuntu-latest
@@ -13,6 +16,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # GitHub은 레포에 60일간 커밋이 없으면 schedule 워크플로를 자동 비활성화한다.
+      # 50일이 넘으면 빈 커밋을 남겨 타이머를 리셋한다.
+      # GITHUB_TOKEN 으로 푸시한 커밋은 다른 워크플로를 트리거하지 않으므로 CI 는 돌지 않는다.
+      - name: Keepalive
+        if: github.event_name == 'schedule'
+        run: |
+          AGE=$(( ( $(date +%s) - $(git log -1 --format=%ct) ) / 86400 ))
+          echo "마지막 커밋으로부터 ${AGE}일 경과"
+          if [ "$AGE" -ge 50 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "chore: keepalive (schedule 워크플로 비활성화 방지)"
+            git push origin HEAD:${{ github.ref_name }}
+            echo "빈 커밋 푸시 완료"
+          else
+            echo "아직 여유 있음, 건너뜀"
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
