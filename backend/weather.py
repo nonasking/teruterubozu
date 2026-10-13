@@ -95,8 +95,8 @@ def get_tomorrow_weather() -> dict:
         OPENWEATHER_LON      – Longitude of the target location
 
     Reliability:
-        - Network/timeout/5xx failures are retried up to 3 times with exponential
-          backoff (1s → 2s → 4s). 4xx responses fail fast (no retry).
+        - Network/timeout/5xx failures are retried up to 3 attempts with exponential
+          backoff — two waits, 1s then 2s. 4xx responses fail fast (no retry).
         - Responses are validated against pydantic schemas; schema drift in the
           fields we depend on raises ``pydantic.ValidationError`` immediately.
     """
