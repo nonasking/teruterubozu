@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from backend.notifier import send_daily_report
+from backend.notifier import _build_html, _header_color, send_daily_report
 
 _ENV = {
     "GMAIL_USER": "test@gmail.com",
@@ -128,3 +128,23 @@ def test_prints_recipient_on_success(mock_smtp_cls, capsys):
     mock_smtp_cls.return_value = _make_smtp_mock()
     send_daily_report(_WEATHER_RAIN)
     assert "recipient@example.com" in capsys.readouterr().out
+
+
+# --- Header color ---
+
+@pytest.mark.parametrize(
+    "weather, expected",
+    [
+        ({"rain": True, "temp_max": 30.0}, "#546e7a"),
+        ({"rain": False, "temp_max": 28.0}, "#e65100"),
+        ({"rain": False, "temp_max": 5.0}, "#3949ab"),
+        ({"rain": False, "temp_max": 18.0}, "#1976d2"),
+    ],
+)
+def test_header_color_by_weather(weather, expected):
+    assert _header_color(weather) == expected
+
+
+def test_html_header_uses_weather_color():
+    html = _build_html(_WEATHER_RAIN, "☔ 내일 날씨 알림 - 비 예보", "좋음", "좋음")
+    assert "background:#546e7a" in html

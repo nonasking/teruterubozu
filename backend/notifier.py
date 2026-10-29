@@ -36,6 +36,22 @@ def _grade_color(grade: str) -> str:
     }[grade]
 
 
+def _header_color(weather: dict) -> str:
+    """Return header background color for the forecast.
+
+    Rain takes precedence; otherwise the color follows tomorrow's high
+    temperature (hot ≥ 28°C, cold ≤ 5°C). All colors keep white header
+    text readable.
+    """
+    if weather["rain"]:
+        return "#546e7a"  # 비: 흐린 청회색
+    if weather["temp_max"] >= 28:
+        return "#e65100"  # 더운 맑은 날: 주황
+    if weather["temp_max"] <= 5:
+        return "#3949ab"  # 추운 맑은 날: 남색
+    return "#1976d2"  # 맑음: 하늘색
+
+
 def _badge(grade: str) -> str:
     """Render an inline severity badge as an HTML span."""
     color = _grade_color(grade)
@@ -80,6 +96,7 @@ def _build_html(
         "padding:10px 4px;color:#222;font-size:14px;text-align:right;"
     )
 
+    header_color = _header_color(weather)
     pm10_badge = _badge(pm10_grade)
     pm2_5_badge = _badge(pm2_5_grade)
 
@@ -104,7 +121,7 @@ def _build_html(
 <body style="margin:0;padding:24px 12px;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="max-width:480px;width:100%;margin:0 auto;border-collapse:collapse;">
     <tr>
-      <td style="background:#1a237e;color:#ffffff;padding:20px 24px;border-radius:8px 8px 0 0;text-align:center;font-size:18px;font-weight:600;">
+      <td style="background:{header_color};color:#ffffff;padding:20px 24px;border-radius:8px 8px 0 0;text-align:center;font-size:18px;font-weight:600;">
         {subject}
       </td>
     </tr>
