@@ -33,7 +33,7 @@ def _make_smtp_mock() -> MagicMock:
 def test_smtp_connects_to_gmail(mock_smtp_cls):
     mock_smtp_cls.return_value = _make_smtp_mock()
     send_daily_report(_WEATHER_RAIN)
-    mock_smtp_cls.assert_called_once_with("smtp.gmail.com", 587)
+    mock_smtp_cls.assert_called_once_with("smtp.gmail.com", 587, timeout=30)
 
 
 @patch("backend.notifier.smtplib.SMTP")

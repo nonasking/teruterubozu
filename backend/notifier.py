@@ -242,7 +242,7 @@ def send_daily_report(weather: dict) -> None:
     msg["To"] = to_email
     msg.attach(alternative)
 
-    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as smtp:
         smtp.ehlo()
         smtp.starttls()
         smtp.login(gmail_user, gmail_app_password)
