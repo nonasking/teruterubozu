@@ -1,5 +1,6 @@
 import os
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 from pydantic import BaseModel
@@ -12,6 +13,21 @@ from tenacity import (
 
 _FORECAST_BASE = "https://api.openweathermap.org/data/2.5/forecast"
 _AIR_POLLUTION_BASE = "https://api.openweathermap.org/data/2.5/air_pollution/forecast"
+
+# OpenWeather의 dt / dt_txt는 UTC다. "내일"은 받는 사람 기준(KST)이어야 하므로
+# 예보 시각을 KST로 바꾼 뒤 날짜를 비교한다. UTC 날짜로 거르면 KST 내일 00~09시
+# (출근 시간대)가 빠지고 모레 새벽이 섞인다.
+_KST = ZoneInfo("Asia/Seoul")
+
+
+def _kst_today() -> date:
+    return datetime.now(_KST).date()
+
+
+def _kst_date_of_dt_txt(dt_txt: str) -> date:
+    """'2025-04-13 09:00:00'(UTC) → 그 시각의 KST 날짜."""
+    utc = datetime.strptime(dt_txt, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+    return utc.astimezone(_KST).date()
 
 
 # --- Pydantic response schemas (validate only the fields we actually use) ---
@@ -104,8 +120,7 @@ def get_tomorrow_weather() -> dict:
     lat = os.environ["OPENWEATHER_LAT"]
     lon = os.environ["OPENWEATHER_LON"]
 
-    tomorrow = date.today() + timedelta(days=1)
-    tomorrow_str = tomorrow.strftime("%Y-%m-%d")
+    tomorrow = _kst_today() + timedelta(days=1)
 
     # --- Forecast API: rain, temp_max, temp_min ---
     forecast_response = _get_with_retry(
@@ -125,8 +140,8 @@ def get_tomorrow_weather() -> dict:
     temp_min_values: list[float] = []
 
     for entry in forecast.list:
-        # entry.dt_txt format: "2025-04-13 09:00:00"
-        if not entry.dt_txt.startswith(tomorrow_str):
+        # entry.dt_txt format: "2025-04-13 09:00:00" (UTC)
+        if _kst_date_of_dt_txt(entry.dt_txt) != tomorrow:
             continue
 
         weather_ids = [w.id for w in entry.weather]
@@ -155,7 +170,7 @@ def get_tomorrow_weather() -> dict:
     pm2_5_values: list[float] = []
 
     for item in air.list:
-        item_date = datetime.utcfromtimestamp(item.dt).date()
+        item_date = datetime.fromtimestamp(item.dt, tz=_KST).date()
         if item_date != tomorrow:
             continue
         pm10_values.append(item.components.pm10)

@@ -6,8 +6,9 @@ on:
     - cron: "0 11 * * *"
   workflow_dispatch: # 수동 실행 버튼 활성화 (테스트용)
 
+# 기본은 읽기 전용. 쓰기 권한은 keepalive job에만 준다.
 permissions:
-  contents: write # keepalive 빈 커밋 푸시용
+  contents: read
 
 jobs:
   check-weather:
@@ -16,24 +17,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # GitHub은 레포에 60일간 커밋이 없으면 schedule 워크플로를 자동 비활성화한다.
-      # 50일이 넘으면 빈 커밋을 남겨 타이머를 리셋한다.
-      # GITHUB_TOKEN 으로 푸시한 커밋은 다른 워크플로를 트리거하지 않으므로 CI 는 돌지 않는다.
-      - name: Keepalive
-        if: github.event_name == 'schedule'
-        run: |
-          AGE=$(( ( $(date +%s) - $(git log -1 --format=%ct) ) / 86400 ))
-          echo "마지막 커밋으로부터 ${AGE}일 경과"
-          if [ "$AGE" -ge 50 ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit --allow-empty -m "chore: keepalive (schedule 워크플로 비활성화 방지)"
-            git push origin HEAD:${{ github.ref_name }}
-            echo "빈 커밋 푸시 완료"
-          else
-            echo "아직 여유 있음, 건너뜀"
-          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,3 +36,30 @@ jobs:
           NOTIFY_TO_EMAIL: ${{ secrets.NOTIFY_TO_EMAIL }}
           CLOTHES_IMAGE_PATH: assets/clothes_per_temperature.jpg
         run: python run.py
+
+  # GitHub은 레포에 60일간 커밋이 없으면 schedule 워크플로를 자동 비활성화한다.
+  # 50일이 넘으면 빈 커밋을 남겨 타이머를 리셋한다.
+  # 메일 발송과 별도 job이라, push가 실패해도(브랜치 보호, 동시 push) 그날 메일은 나간다.
+  # GITHUB_TOKEN 으로 푸시한 커밋은 다른 워크플로를 트리거하지 않으므로 CI 는 돌지 않는다.
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Keepalive
+        run: |
+          AGE=$(( ( $(date +%s) - $(git log -1 --format=%ct) ) / 86400 ))
+          echo "마지막 커밋으로부터 ${AGE}일 경과"
+          if [ "$AGE" -ge 50 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "chore: keepalive (schedule 워크플로 비활성화 방지)"
+            git push origin HEAD:${{ github.ref_name }}
+            echo "빈 커밋 푸시 완료"
+          else
+            echo "아직 여유 있음, 건너뜀"
+          fi

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,14 +20,28 @@ def env(monkeypatch):
         monkeypatch.setenv(k, v)
 
 
+# "오늘"을 KST 2026-04-13으로 고정해 실행 시각·타임존과 무관하게 만든다.
+_TODAY = date(2026, 4, 13)
+
+
+@pytest.fixture(autouse=True)
+def fixed_today():
+    with patch("backend.weather._kst_today", return_value=_TODAY):
+        yield
+
+
 def _tomorrow() -> str:
-    return (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+    return (_TODAY + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def _today() -> str:
+    return _TODAY.strftime("%Y-%m-%d")
 
 
 def _tomorrow_dt() -> int:
-    """Unix timestamp for tomorrow noon UTC."""
-    tomorrow = date.today() + timedelta(days=1)
-    return int(datetime(tomorrow.year, tomorrow.month, tomorrow.day, 12, 0, 0).timestamp())
+    """Unix timestamp for tomorrow noon UTC (= 21:00 KST tomorrow)."""
+    tomorrow = _TODAY + timedelta(days=1)
+    return int(datetime(tomorrow.year, tomorrow.month, tomorrow.day, 12, 0, 0, tzinfo=UTC).timestamp())
 
 
 def _forecast_entry(date_str: str, weather_id: int, temp_max: float = 20.0, temp_min: float = 10.0) -> dict:
@@ -419,3 +433,50 @@ def test_valid_response_passes_schema_validation(mock_get):
     assert result["rain"] is True
     assert result["temp_max"] == pytest.approx(22.0)
     assert result["pm10"] == pytest.approx(20.0)
+
+
+# --- KST 날짜 경계 ---
+
+def _forecast_entry_at(dt_txt: str, weather_id: int, temp_max: float = 20.0, temp_min: float = 10.0) -> dict:
+    return {
+        "dt_txt": dt_txt,
+        "weather": [{"id": weather_id}],
+        "main": {"temp_max": temp_max, "temp_min": temp_min},
+    }
+
+
+@patch("backend.weather.requests.get")
+def test_rain_in_kst_early_morning_counts_as_tomorrow(mock_get):
+    """UTC 오늘 18:00 = KST 내일 03:00. 출근 전 비를 놓치면 안 된다."""
+    mock_get.side_effect = _make_get_side_effect(
+        [_forecast_entry_at(f"{_today()} 18:00:00", 500)],
+        [],
+    )
+    assert get_tomorrow_weather()["rain"] is True
+
+
+@patch("backend.weather.requests.get")
+def test_day_after_early_morning_utc_tomorrow_is_excluded(mock_get):
+    """UTC 내일 18:00 = KST 모레 03:00. 내일 집계에 섞이면 안 된다."""
+    mock_get.side_effect = _make_get_side_effect(
+        [
+            _forecast_entry_at(f"{_tomorrow()} 03:00:00", 800, temp_max=22.0, temp_min=15.0),
+            _forecast_entry_at(f"{_tomorrow()} 18:00:00", 500, temp_max=12.0, temp_min=-3.0),
+        ],
+        [],
+    )
+    result = get_tomorrow_weather()
+    assert result["rain"] is False
+    assert result["temp_min"] == 15.0
+
+
+@patch("backend.weather.requests.get")
+def test_air_pollution_uses_kst_date(mock_get):
+    """KST 내일 00:30(UTC 오늘 15:30) 미세먼지는 내일 평균에 들어간다."""
+    kst_tomorrow_0030 = int(datetime(2026, 4, 13, 15, 30, tzinfo=UTC).timestamp())
+    kst_today_2330 = int(datetime(2026, 4, 13, 14, 30, tzinfo=UTC).timestamp())
+    mock_get.side_effect = _make_get_side_effect(
+        [_forecast_entry(_tomorrow(), 800)],
+        [_air_entry(kst_tomorrow_0030, pm10=40.0), _air_entry(kst_today_2330, pm10=99.0)],
+    )
+    assert get_tomorrow_weather()["pm10"] == 40.0
