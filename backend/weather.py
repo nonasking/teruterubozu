@@ -20,8 +20,19 @@ _AIR_POLLUTION_BASE = "https://api.openweathermap.org/data/2.5/air_pollution/for
 _KST = ZoneInfo("Asia/Seoul")
 
 
-def _kst_today() -> date:
-    return datetime.now(_KST).date()
+def _kst_now() -> datetime:
+    return datetime.now(_KST)
+
+
+def _forecast_day(now: datetime) -> date:
+    """메일이 말하는 "내일" = 받는 사람이 자고 일어날 그날.
+
+    예약은 20:00 KST지만 GitHub Actions 스케줄은 몇 시간씩 밀려 자정을 넘겨 도는
+    일이 잦다(실측 00:53~05:39 KST). 그때 오늘+1을 쓰면 모레 날씨가 나간다.
+    정오 이전 실행은 그날, 이후 실행은 다음 날을 대상으로 한다.
+    """
+    today = now.astimezone(_KST).date()
+    return today if now.astimezone(_KST).hour < 12 else today + timedelta(days=1)
 
 
 def _kst_date_of_dt_txt(dt_txt: str) -> date:
@@ -120,7 +131,7 @@ def get_tomorrow_weather() -> dict:
     lat = os.environ["OPENWEATHER_LAT"]
     lon = os.environ["OPENWEATHER_LON"]
 
-    tomorrow = _kst_today() + timedelta(days=1)
+    tomorrow = _forecast_day(_kst_now())
 
     # --- Forecast API: rain, temp_max, temp_min ---
     forecast_response = _get_with_retry(
