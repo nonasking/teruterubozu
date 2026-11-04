@@ -123,7 +123,7 @@ poetry run uvicorn backend.main:app --reload
 
 ## Testing
 
-49 tests cover the OpenWeather client (retry policy, schema validation, "tomorrow" filtering in KST including the UTC date boundary), the email notifier (air-quality grading, MIME structure, inline image fallback), and the scheduler. No network calls or real SMTP connections are made — everything is mocked.
+56 tests cover the OpenWeather client (retry policy, schema validation, "tomorrow" filtering in KST including the UTC date boundary and runs that GitHub delays past midnight), the email notifier (air-quality grading, MIME structure, inline image fallback), and the scheduler. No network calls or real SMTP connections are made — everything is mocked.
 
 ```bash
 # Install dev dependencies (pytest, pytest-cov, ruff)

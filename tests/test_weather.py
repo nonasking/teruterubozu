@@ -5,7 +5,7 @@ import pytest
 import requests
 from pydantic import ValidationError
 
-from backend.weather import _get_with_retry, get_tomorrow_weather
+from backend.weather import _KST, _forecast_day, _get_with_retry, get_tomorrow_weather
 
 _ENV = {
     "OPENWEATHER_API_KEY": "test_key",
@@ -26,7 +26,8 @@ _TODAY = date(2026, 4, 13)
 
 @pytest.fixture(autouse=True)
 def fixed_today():
-    with patch("backend.weather._kst_today", return_value=_TODAY):
+    # 20:00 KST 정시 실행 → 대상은 다음 날
+    with patch("backend.weather._kst_now", return_value=datetime(2026, 4, 13, 20, 0, tzinfo=_KST)):
         yield
 
 
@@ -480,3 +481,40 @@ def test_air_pollution_uses_kst_date(mock_get):
         [_air_entry(kst_tomorrow_0030, pm10=40.0), _air_entry(kst_today_2330, pm10=99.0)],
     )
     assert get_tomorrow_weather()["pm10"] == 40.0
+
+
+# --- 스케줄 지연 ---
+
+@pytest.mark.parametrize(
+    "run_at, expected",
+    [
+        (datetime(2026, 4, 13, 20, 0), date(2026, 4, 14)),   # 정시
+        (datetime(2026, 4, 13, 23, 50), date(2026, 4, 14)),  # 자정 직전으로 밀림
+        (datetime(2026, 4, 14, 3, 16), date(2026, 4, 14)),   # 자정을 넘겨 밀림: 모레가 아니라 그날
+        (datetime(2026, 4, 14, 11, 59), date(2026, 4, 14)),
+        (datetime(2026, 4, 14, 12, 0), date(2026, 4, 15)),
+    ],
+)
+def test_forecast_day_survives_delayed_schedule(run_at, expected):
+    assert _forecast_day(run_at.replace(tzinfo=_KST)) == expected
+
+
+def test_forecast_day_converts_utc_input():
+    # GitHub 러너는 UTC. 18:16 UTC = 03:16 KST 다음 날
+    assert _forecast_day(datetime(2026, 4, 13, 18, 16, tzinfo=UTC)) == date(2026, 4, 14)
+
+
+@patch("backend.weather.requests.get")
+def test_delayed_run_reports_the_coming_morning(mock_get):
+    """03:16 KST 실행이면 그날(4/14) 예보를 집계하고 모레(4/15)는 섞지 않는다."""
+    mock_get.side_effect = _make_get_side_effect(
+        [
+            _forecast_entry_at("2026-04-13 21:00:00", 500, temp_min=5.0),   # KST 4/14 06:00 비
+            _forecast_entry_at("2026-04-14 21:00:00", 800, temp_min=-9.0),  # KST 4/15 06:00
+        ],
+        [],
+    )
+    with patch("backend.weather._kst_now", return_value=datetime(2026, 4, 14, 3, 16, tzinfo=_KST)):
+        result = get_tomorrow_weather()
+    assert result["rain"] is True
+    assert result["temp_min"] == 5.0
